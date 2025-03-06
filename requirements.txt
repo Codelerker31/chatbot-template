@@ -1,2 +1,7 @@
 streamlit
-openai
+openai>=1.0.0
+anthropic
+google-generativeai
+supabase
+extra-streamlit-components
+streamlit-cookies-manager

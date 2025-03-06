@@ -1,56 +1,61 @@
 import streamlit as st
-from openai import OpenAI
 
-# Show title and description.
-st.title("💬 Chatbot")
+# This must be the first Streamlit command
+st.set_page_config(page_title="Multi-Provider Chatbot", layout="wide")
+
+from openai import OpenAI
+from anthropic import Anthropic
+import google.generativeai as genai
+
+# Components
+from components.auth import render_auth
+from components.sidebar import render_sidebar
+from components.chat_interface import render_chat
+from components.settings import render_settings
+
+# Utilities
+from utils.supabase_client import init_supabase
+from utils.local_storage import get_api_keys, save_api_key
+from utils.session_state import initialize_session_state
+
+# Initialize session state
+initialize_session_state()
+
+# Initialize Supabase client
+supabase = init_supabase()
+
+# App title
+st.title("💬 Multi-Provider Chatbot")
 st.write(
-    "This is a simple chatbot that uses OpenAI's GPT-3.5 model to generate responses. "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-    "You can also learn how to build this app step by step by [following our tutorial](https://docs.streamlit.io/develop/tutorials/llms/build-conversational-apps)."
+    "Chat with various AI models from OpenAI, Anthropic, Google, and Perplexity. "
+    "Your API keys are stored locally on your device."
 )
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
+# Authentication section
+user = render_auth(supabase)
+
+# If user is authenticated, show the main app
+if user:
+    # Sidebar for chat management
+    selected_chat, selected_provider, selected_model = render_sidebar(supabase, user)
+    
+    # Main content area - split into two columns
+    col1, col2 = st.columns([7, 3])
+    
+    with col1:
+        # Render chat interface
+        if "selected_chat" in st.session_state:
+            selected_chat = st.session_state.selected_chat
+            render_chat(
+                chat_id=selected_chat["id"],
+                provider=selected_chat["provider"],
+                model=selected_chat["model"]
+            )
+        else:
+            st.info("Select a chat from the sidebar or create a new one.")
+    
+    with col2:
+        # API settings
+        render_settings()
 else:
-
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
-
-    # Create a session state variable to store the chat messages. This ensures that the
-    # messages persist across reruns.
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
-    # Display the existing chat messages via `st.chat_message`.
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Create a chat input field to allow the user to enter a message. This will display
-    # automatically at the bottom of the page.
-    if prompt := st.chat_input("What is up?"):
-
-        # Store and display the current prompt.
-        st.session_state.messages.append({"role": "user", "content": prompt})
-        with st.chat_message("user"):
-            st.markdown(prompt)
-
-        # Generate a response using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": m["role"], "content": m["content"]}
-                for m in st.session_state.messages
-            ],
-            stream=True,
-        )
-
-        # Stream the response to the chat using `st.write_stream`, then store it in 
-        # session state.
-        with st.chat_message("assistant"):
-            response = st.write_stream(stream)
-        st.session_state.messages.append({"role": "assistant", "content": response})
+    st.info("Please log in or sign up to use the chatbot.")
